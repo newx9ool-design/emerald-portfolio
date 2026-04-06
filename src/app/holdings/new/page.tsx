@@ -156,13 +156,16 @@ export default function NewHoldingPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
-                  placeholder="e.g. Apple, Toyota, bitcoin"
+                  placeholder="Stock code (e.g. 7203) or name (e.g. Apple)"
                   className="flex-1 border border-brand-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <Button type="button" onClick={handleSearch} disabled={searching}>
                   {searching ? '...' : 'Search'}
                 </Button>
               </div>
+              <p className="text-xs text-gray-400 mt-1">
+                TSE stocks: use 4-digit code (e.g. 7203=Toyota, 1803=Shimizu)
+              </p>
 
               {/* Search results */}
               {searchResults.length > 0 && (
@@ -181,7 +184,13 @@ export default function NewHoldingPage() {
                 </div>
               )}
               {searched && !searching && searchResults.length === 0 && (
-                <p className="text-sm text-gray-400 mt-2">No results found</p>
+                <div className="mt-2 p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-700">No results found</p>
+                  <p className="text-xs text-yellow-600 mt-1">
+                    For Japanese stocks, try the 4-digit stock code instead of the company name.
+                    You can find codes at Yahoo Finance Japan or your brokerage.
+                  </p>
+                </div>
               )}
             </div>
           )}
