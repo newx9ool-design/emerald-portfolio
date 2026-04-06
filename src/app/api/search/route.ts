@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchSecurities, quoteSummary } from '@/app/lib/market/yahoo';
+import { searchSecurities, quoteLookup, searchYahooAPI } from '@/app/lib/market/yahoo';
 
 // 日本語→英語の変換マップ
 const JA_KEYWORD_MAP: Record<string, string> = {
@@ -66,9 +66,23 @@ function containsJapanese(text: string): boolean {
   return /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text);
 }
 
-// Check if query is a stock code number (e.g. 7203, 9984)
 function isStockCode(query: string): boolean {
   return /^\d{4}$/.test(query.trim());
+}
+
+function dedup(results: any[]) {
+  const seen = new Set<string>();
+  return results.filter(r => {
+    if (seen.has(r.symbol)) return false;
+    seen.add(r.symbol);
+    return true;
+  });
+}
+
+function sortTseFirst(results: any[]) {
+  const tse = results.filter(r => r.symbol.endsWith('.T'));
+  const other = results.filter(r => !r.symbol.endsWith('.T'));
+  return [...tse, ...other];
 }
 
 export async function GET(request: NextRequest) {
@@ -79,12 +93,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const trimmed = q.trim();
-    const allResults: { symbol: string; name: string; type: string; exchange: string }[] = [];
+    let allResults: any[] = [];
 
-    // Case 1: 4-digit stock code -> directly look up TSE symbol
+    // Case 1: 4-digit stock code -> directly look up as TSE symbol
     if (isStockCode(trimmed)) {
       const tseSymbol = trimmed + '.T';
-      const quote = await quoteSummary(tseSymbol);
+      const quote = await quoteLookup(tseSymbol);
       if (quote) {
         allResults.push({
           symbol: quote.symbol,
@@ -93,59 +107,50 @@ export async function GET(request: NextRequest) {
           exchange: quote.exchange,
         });
       }
-      // Also search Yahoo for other matches
-      const yahooResults = await searchSecurities(trimmed);
-      for (const yr of yahooResults) {
-        if (!allResults.find(r => r.symbol === yr.symbol)) {
-          allResults.push(yr);
-        }
-      }
-      return NextResponse.json(allResults);
+      // Also try library search and direct API
+      const [libResults, apiResults] = await Promise.all([
+        searchSecurities(trimmed).catch(() => []),
+        searchYahooAPI(trimmed).catch(() => []),
+      ]);
+      allResults = [...allResults, ...libResults, ...apiResults];
+      return NextResponse.json(dedup(allResults));
     }
 
     // Case 2: Japanese keyword
+    let searchQuery = trimmed;
     if (containsJapanese(trimmed)) {
-      const englishQuery = translateQuery(trimmed);
-
-      // Search with English translation
-      const yahooResults = await searchSecurities(englishQuery);
-
-      // Separate TSE (.T) results and others
-      const tseResults = yahooResults.filter((r: any) => r.symbol.endsWith('.T'));
-      const otherResults = yahooResults.filter((r: any) => !r.symbol.endsWith('.T'));
-
-      // TSE first, then others
-      allResults.push(...tseResults, ...otherResults);
-
-      // If no TSE results found, also try original Japanese query
-      if (tseResults.length === 0) {
-        const japResults = await searchSecurities(trimmed);
-        const japTse = japResults.filter((r: any) => r.symbol.endsWith('.T'));
-        for (const jr of japTse) {
-          if (!allResults.find(r => r.symbol === jr.symbol)) {
-            allResults.unshift(jr);
-          }
-        }
-        for (const jr of japResults) {
-          if (!allResults.find(r => r.symbol === jr.symbol)) {
-            allResults.push(jr);
-          }
-        }
-      }
-
-      return NextResponse.json(allResults);
+      searchQuery = translateQuery(trimmed);
     }
 
-    // Case 3: English / symbol query
-    const yahooResults = await searchSecurities(trimmed);
+    // Try all three methods in parallel
+    const [libResults, apiResults, libOrigResults] = await Promise.all([
+      searchSecurities(searchQuery).catch(() => []),
+      searchYahooAPI(searchQuery).catch(() => []),
+      containsJapanese(trimmed) && searchQuery !== trimmed
+        ? searchSecurities(trimmed).catch(() => [])
+        : Promise.resolve([]),
+    ]);
 
-    // Prioritize .T results
-    const tseResults = yahooResults.filter((r: any) => r.symbol.endsWith('.T'));
-    const otherResults = yahooResults.filter((r: any) => !r.symbol.endsWith('.T'));
-    allResults.push(...tseResults, ...otherResults);
+    allResults = [...libResults, ...apiResults, ...libOrigResults];
+    allResults = sortTseFirst(dedup(allResults));
+
+    // If still no results, try direct quote lookup for common patterns
+    if (allResults.length === 0) {
+      // Try as-is (might be a symbol like AAPL)
+      const quote = await quoteLookup(searchQuery).catch(() => null);
+      if (quote) {
+        allResults.push({
+          symbol: quote.symbol,
+          name: quote.name,
+          type: quote.type,
+          exchange: quote.exchange,
+        });
+      }
+    }
 
     return NextResponse.json(allResults);
   } catch (e) {
+    console.error('Search route error:', e);
     return NextResponse.json({ error: 'Search failed' }, { status: 500 });
   }
 }

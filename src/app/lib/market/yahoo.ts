@@ -12,7 +12,7 @@ export async function getStockPrice(symbol: string) {
       change_pct: result.regularMarketChangePercent || 0,
     };
   } catch (error) {
-    console.error('Yahoo Finance error:', error);
+    console.error('Yahoo Finance quote error:', symbol, error);
     return null;
   }
 }
@@ -34,12 +34,13 @@ export async function searchSecurities(query: string) {
         exchange: q.exchange || q.exchDisp || '',
       }));
   } catch (error) {
-    console.error('Search error:', error);
+    console.error('Yahoo Finance search error:', query, error);
     return [];
   }
 }
 
-export async function quoteSummary(symbol: string) {
+// Direct quote lookup - works for any valid symbol like 7203.T
+export async function quoteLookup(symbol: string) {
   try {
     const result: any = await yahooFinance.quote(symbol);
     if (!result || !result.symbol) return null;
@@ -53,5 +54,30 @@ export async function quoteSummary(symbol: string) {
     };
   } catch {
     return null;
+  }
+}
+
+// Fallback: direct Yahoo Finance search API call
+export async function searchYahooAPI(query: string) {
+  try {
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0&lang=en-US`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.quotes || [])
+      .filter((q: any) => q.symbol)
+      .map((q: any) => ({
+        symbol: q.symbol,
+        name: q.longname || q.shortname || q.symbol || '',
+        type: q.typeDisp || q.quoteType || 'Unknown',
+        exchange: q.exchange || q.exchDisp || '',
+      }));
+  } catch (error) {
+    console.error('Yahoo API direct search error:', query, error);
+    return [];
   }
 }
