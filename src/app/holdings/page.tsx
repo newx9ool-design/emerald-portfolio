@@ -7,6 +7,14 @@ import { Badge } from '@/app/components/ui/Badge';
 import { Button } from '@/app/components/ui/Button';
 import { Loading } from '@/app/components/ui/Loading';
 
+type PriceInfo = {
+  livePrice: number;
+  liveCurrency: string;
+  liveValueJPY: number;
+  purchaseValueJPY: number;
+  diffJPY: number;
+};
+
 export default function HoldingsPage() {
   const { holdings, loading, error, editHolding, refetch } = useHoldings();
   const { rate: usdJpy, loading: rateLoading } = useExchangeRate('USD', 'JPY');
@@ -20,12 +28,34 @@ export default function HoldingsPage() {
     purchase_currency: 'JPY', memo: '',
   });
 
+  // Live prices state
+  const [livePrices, setLivePrices] = useState<Record<string, PriceInfo>>({});
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceUpdated, setPriceUpdated] = useState(false);
+
   if (loading || rateLoading) return <Loading message="Loading..." />;
   if (error) return <p className="text-red-500">Error: {error}</p>;
 
   const isUSD = (c: string) => c === 'USD';
   const isCash = (c: string) => c === 'CASH';
   const isCrypto = (c: string) => c === 'CRYPTO';
+
+  const handleFetchPrices = async () => {
+    setPriceLoading(true);
+    try {
+      const res = await fetch('/api/prices');
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setLivePrices(data.prices || {});
+      setPriceUpdated(true);
+      setMessage('Prices updated');
+      setTimeout(() => setMessage(''), 5000);
+    } catch {
+      setMessage('Failed to update prices');
+    } finally {
+      setPriceLoading(false);
+    }
+  };
 
   const handleEditClick = (h: any) => {
     setEditId(h.id);
@@ -244,11 +274,22 @@ export default function HoldingsPage() {
     );
   };
 
+  const formatDiff = (diff: number) => {
+    if (diff > 0) return { text: `+Y${diff.toLocaleString()}`, color: 'text-green-600' };
+    if (diff < 0) return { text: `-Y${Math.abs(diff).toLocaleString()}`, color: 'text-red-500' };
+    return { text: 'Y0', color: 'text-gray-500' };
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-brand-800">Holdings</h1>
-        <a href="/holdings/new"><Button>+ New</Button></a>
+        <div className="flex gap-2">
+          <Button onClick={handleFetchPrices} disabled={priceLoading} variant="secondary">
+            {priceLoading ? 'Updating...' : 'Update Prices'}
+          </Button>
+          <a href="/holdings/new"><Button>+ New</Button></a>
+        </div>
       </div>
 
       {message && (
@@ -266,10 +307,12 @@ export default function HoldingsPage() {
             const currency = h.purchase_currency || 'JPY';
             const categoryCode = h.asset_categories?.code || 'OTHER';
             const totalJPY = isUSD(currency) && usdJpy ? totalLocal * usdJpy : totalLocal;
+            const price = livePrices[h.id];
+            const diff = price ? formatDiff(price.diffJPY) : null;
 
             return (
               <Card key={h.id}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                   <div>
                     <p className="font-semibold text-brand-800">{h.name_ja}</p>
                     <p className="text-sm text-gray-500">{h.symbol}</p>
@@ -285,18 +328,38 @@ export default function HoldingsPage() {
                       </p>
                     ) : (
                       <div>
-                        <p className="text-sm text-gray-500">
-                          {h.quantity} x {isUSD(currency) ? '$' : 'Y'}
+                        {/* Holdings info */}
+                        <p className="text-xs text-gray-400">
+                          {h.quantity} shares x {isUSD(currency) ? '$' : 'Y'}
                           {h.avg_purchase_price.toLocaleString()}
                         </p>
-                        {isUSD(currency) ? (
-                          <div>
-                            <p className="font-bold text-brand-700">${totalLocal.toLocaleString()}</p>
-                            <p className="text-sm text-gray-400">= Y{Math.round(totalJPY).toLocaleString()}</p>
+
+                        {/* Purchase value */}
+                        <p className="text-sm text-gray-500">
+                          Cost: {isUSD(currency)
+                            ? '$' + totalLocal.toLocaleString() + ' (Y' + Math.round(totalJPY).toLocaleString() + ')'
+                            : 'Y' + Math.round(totalLocal).toLocaleString()}
+                        </p>
+
+                        {/* Live value */}
+                        {price && !isCash(categoryCode) ? (
+                          <div className="mt-1 p-2 bg-gray-50 rounded">
+                            <p className="text-xs text-gray-400">
+                              Now: {price.liveCurrency === 'USD' ? '$' : 'Y'}
+                              {price.livePrice.toLocaleString()} /unit
+                            </p>
+                            <p className="font-bold text-brand-700">
+                              Y{price.liveValueJPY.toLocaleString()}
+                            </p>
+                            <p className={`text-sm font-semibold ${diff!.color}`}>
+                              {diff!.text}
+                            </p>
                           </div>
-                        ) : (
-                          <p className="font-bold text-brand-700">Y{Math.round(totalLocal).toLocaleString()}</p>
-                        )}
+                        ) : !priceUpdated ? (
+                          <p className="text-xs text-gray-300 mt-1">
+                            Click &quot;Update Prices&quot; for live value
+                          </p>
+                        ) : null}
                       </div>
                     )}
 
