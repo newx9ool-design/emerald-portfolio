@@ -7,18 +7,24 @@ import { Input } from '@/app/components/ui/Input';
 import { Button } from '@/app/components/ui/Button';
 
 type Category = { id: string; code: string; name_ja: string };
+type SearchResult = { symbol: string; name: string; type: string; exchange: string };
 
 export default function NewHoldingPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     category_id: '',
+    symbol: '',
     name_ja: '',
     quantity: '',
     avg_purchase_price: '',
     purchase_currency: 'JPY',
     memo: '',
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,11 +44,35 @@ export default function NewHoldingPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const generateSymbol = (name: string, categoryCode: string): string => {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const prefix = categoryCode || 'OTH';
-    const nameSlug = name.slice(0, 4).toUpperCase();
-    return `${prefix}-${nameSlug}-${timestamp}`;
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearched(true);
+    setSearchResults([]);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSearchResults(data);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectStock = (result: SearchResult) => {
+    setForm({
+      ...form,
+      symbol: result.symbol,
+      name_ja: result.name || result.symbol,
+    });
+    setSearchResults([]);
+    setSearched(false);
+    setSearchQuery('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,9 +80,7 @@ export default function NewHoldingPage() {
     setSubmitting(true);
     setError('');
     try {
-      const selectedCategory = categories.find(c => c.id === form.category_id);
-      const categoryCode = selectedCategory?.code || 'OTHER';
-      const symbol = generateSymbol(form.name_ja, categoryCode);
+      const symbol = form.symbol || generateSymbol(form.name_ja, getCategoryCode());
 
       const res = await fetch('/api/holdings', {
         method: 'POST',
@@ -69,91 +97,177 @@ export default function NewHoldingPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || '登録に失敗しました');
+        throw new Error(data.error || 'Registration failed');
       }
       router.push('/holdings');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '不明なエラー');
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const getCategoryCode = () => {
+    const cat = categories.find(c => c.id === form.category_id);
+    return cat?.code || 'OTHER';
+  };
+
+  const generateSymbol = (name: string, categoryCode: string): string => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const prefix = categoryCode || 'OTH';
+    const nameSlug = name.slice(0, 4).toUpperCase();
+    return `${prefix}-${nameSlug}-${timestamp}`;
+  };
+
+  const selectedCategoryCode = getCategoryCode();
+  const isCash = selectedCategoryCode === 'CASH';
+
   const categoryOptions = [
-    { value: '', label: '選択してください' },
+    { value: '', label: '-- Select --' },
     ...categories.map(c => ({ value: c.id, label: c.name_ja })),
   ];
 
   return (
     <div className="max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-brand-800 mb-6">銘柄を登録</h1>
+      <h1 className="text-2xl font-bold text-brand-800 mb-6">Add Holding</h1>
       <Card>
-        <CardTitle>銘柄情報</CardTitle>
+        <CardTitle>Holding Info</CardTitle>
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit}>
+          {/* Step 1: Category */}
           <Input
-            label="カテゴリ"
+            label="Category"
             name="category_id"
             value={form.category_id}
             onChange={handleChange}
             required
             options={categoryOptions}
           />
-          <Input
-            label="銘柄名"
-            name="name_ja"
-            value={form.name_ja}
-            onChange={handleChange}
-            required
-            placeholder="例: トヨタ自動車、Apple Inc.、ビットコイン"
-          />
-          <Input
-            label="数量"
-            name="quantity"
-            type="number"
-            value={form.quantity}
-            onChange={handleChange}
-            required
-            placeholder="例: 100"
-          />
-          <Input
-            label="平均取得単価"
-            name="avg_purchase_price"
-            type="number"
-            value={form.avg_purchase_price}
-            onChange={handleChange}
-            required
-            placeholder="例: 2500"
-          />
-          <Input
-            label="通貨"
-            name="purchase_currency"
-            value={form.purchase_currency}
-            onChange={handleChange}
-            options={[
-              { value: 'JPY', label: '円 (JPY)' },
-              { value: 'USD', label: 'ドル (USD)' },
-            ]}
-          />
-          <Input
-            label="メモ"
-            name="memo"
-            value={form.memo}
-            onChange={handleChange}
-            placeholder="任意のメモ"
-          />
-          <div className="flex gap-3 mt-6">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? '登録中...' : '登録する'}
-            </Button>
-            <button
-              type="button"
-              onClick={() => router.push('/holdings')}
-              className="px-4 py-2 bg-brand-100 text-brand-700 rounded-lg hover:bg-brand-200 transition"
-            >
-              キャンセル
-            </button>
-          </div>
+
+          {/* Step 2: Search or manual input */}
+          {form.category_id && !isCash && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-brand-700 mb-1">
+                Search Stock / Crypto
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
+                  placeholder="e.g. Apple, Toyota, bitcoin"
+                  className="flex-1 border border-brand-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+                <Button type="button" onClick={handleSearch} disabled={searching}>
+                  {searching ? '...' : 'Search'}
+                </Button>
+              </div>
+
+              {/* Search results */}
+              {searchResults.length > 0 && (
+                <div className="mt-2 border border-brand-200 rounded-lg max-h-60 overflow-y-auto">
+                  {searchResults.map((r, i) => (
+                    <button
+                      key={`${r.symbol}-${i}`}
+                      type="button"
+                      onClick={() => handleSelectStock(r)}
+                      className="w-full text-left px-3 py-2 hover:bg-brand-50 border-b border-brand-100 last:border-b-0"
+                    >
+                      <p className="font-medium text-brand-800 text-sm">{r.name}</p>
+                      <p className="text-xs text-gray-500">{r.symbol} · {r.exchange} · {r.type}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searched && !searching && searchResults.length === 0 && (
+                <p className="text-sm text-gray-400 mt-2">No results found</p>
+              )}
+            </div>
+          )}
+
+          {/* Selected stock info */}
+          {form.symbol && !isCash && (
+            <div className="mb-4 p-3 bg-brand-50 rounded-lg">
+              <p className="text-sm text-brand-600">Selected:</p>
+              <p className="font-semibold text-brand-800">{form.name_ja}</p>
+              <p className="text-xs text-gray-500">{form.symbol}</p>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, symbol: '', name_ja: '' })}
+                className="text-xs text-red-400 hover:text-red-600 underline mt-1"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {/* Cash: manual name */}
+          {isCash && (
+            <Input
+              label="Name"
+              name="name_ja"
+              value={form.name_ja}
+              onChange={handleChange}
+              required
+              placeholder="e.g. Savings, Emergency Fund"
+            />
+          )}
+
+          {/* Step 3: Quantity and price */}
+          {(form.symbol || isCash) && (
+            <>
+              <Input
+                label={isCash ? 'Amount' : 'Quantity'}
+                name="quantity"
+                type="number"
+                value={form.quantity}
+                onChange={handleChange}
+                required
+                placeholder={isCash ? 'e.g. 1000000' : 'e.g. 100'}
+              />
+              {!isCash && (
+                <Input
+                  label="Avg Purchase Price"
+                  name="avg_purchase_price"
+                  type="number"
+                  value={form.avg_purchase_price}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. 2500"
+                />
+              )}
+              <Input
+                label="Currency"
+                name="purchase_currency"
+                value={form.purchase_currency}
+                onChange={handleChange}
+                options={[
+                  { value: 'JPY', label: 'JPY' },
+                  { value: 'USD', label: 'USD' },
+                ]}
+              />
+              <Input
+                label="Memo"
+                name="memo"
+                value={form.memo}
+                onChange={handleChange}
+                placeholder="Optional memo"
+              />
+              <div className="flex gap-3 mt-6">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Save'}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/holdings')}
+                  className="px-4 py-2 bg-brand-100 text-brand-700 rounded-lg hover:bg-brand-200 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
         </form>
       </Card>
     </div>

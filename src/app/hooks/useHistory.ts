@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export type SnapshotPoint = {
   date: string;
@@ -10,23 +10,31 @@ export function useHistory() {
   const [history, setHistory] = useState<SnapshotPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchHistory() {
-      try {
-        const res = await fetch('/api/dashboard');
-        if (!res.ok) throw new Error('取得失敗');
-        const json = await res.json();
-        // 現時点ではスナップショットが蓄積されるまでダミーデータ
-        const today = new Date().toISOString().split('T')[0];
-        setHistory([{ date: today, valueJPY: json.totalValueJPY || 0 }]);
-      } catch (e) {
-        console.error('履歴エラー:', e);
-      } finally {
-        setLoading(false);
+  const fetchHistory = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/snapshot');
+      if (!res.ok) throw new Error('Fetch failed');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data);
       }
+    } catch (e) {
+      console.error('History fetch error:', e);
+    } finally {
+      setLoading(false);
     }
-    fetchHistory();
   }, []);
 
-  return { history, loading };
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const saveSnapshot = async () => {
+    const res = await fetch('/api/snapshot', { method: 'POST' });
+    if (!res.ok) throw new Error('Snapshot save failed');
+    const result = await res.json();
+    await fetchHistory();
+    return result;
+  };
+
+  return { history, loading, saveSnapshot, refetch: fetchHistory };
 }
