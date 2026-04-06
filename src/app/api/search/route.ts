@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchSecurities } from '@/app/lib/market/yahoo';
+import { searchSecurities, quoteSummary } from '@/app/lib/market/yahoo';
 
-// 日本語→英語/シンボルの変換マップ
+// 日本語→英語の変換マップ
 const JA_KEYWORD_MAP: Record<string, string> = {
   'トヨタ': 'Toyota',
   'ソニー': 'Sony',
@@ -14,9 +14,11 @@ const JA_KEYWORD_MAP: Record<string, string> = {
   'リクルート': 'Recruit',
   'パナソニック': 'Panasonic',
   'シャープ': 'Sharp',
-  '三菱': 'Mitsubishi',
-  '三井': 'Mitsui',
-  '住友': 'Sumitomo',
+  '三菱商事': 'Mitsubishi Corp',
+  '三菱UFJ': 'Mitsubishi UFJ',
+  '三菱重工': 'Mitsubishi Heavy',
+  '三井物産': 'Mitsui',
+  '住友商事': 'Sumitomo Corp',
   'NTT': 'NTT',
   'KDDI': 'KDDI',
   '日産': 'Nissan',
@@ -52,98 +54,6 @@ const JA_KEYWORD_MAP: Record<string, string> = {
   '銀': 'silver',
 };
 
-// 日本語→東証コードの直接マップ
-const JA_TSE_MAP: Record<string, { symbol: string; name: string }[]> = {
-  'トヨタ': [
-    { symbol: '7203.T', name: 'Toyota Motor Corp' },
-  ],
-  'ソニー': [
-    { symbol: '6758.T', name: 'Sony Group Corp' },
-  ],
-  '任天堂': [
-    { symbol: '7974.T', name: 'Nintendo Co Ltd' },
-  ],
-  'ソフトバンク': [
-    { symbol: '9984.T', name: 'SoftBank Group Corp' },
-    { symbol: '9434.T', name: 'SoftBank Corp' },
-  ],
-  'ホンダ': [
-    { symbol: '7267.T', name: 'Honda Motor Co Ltd' },
-  ],
-  'キーエンス': [
-    { symbol: '6861.T', name: 'Keyence Corp' },
-  ],
-  'ファーストリテイリング': [
-    { symbol: '9983.T', name: 'Fast Retailing Co Ltd' },
-  ],
-  'ユニクロ': [
-    { symbol: '9983.T', name: 'Fast Retailing Co Ltd' },
-  ],
-  'パナソニック': [
-    { symbol: '6752.T', name: 'Panasonic Holdings Corp' },
-  ],
-  '三菱商事': [
-    { symbol: '8058.T', name: 'Mitsubishi Corp' },
-  ],
-  '三菱UFJ': [
-    { symbol: '8306.T', name: 'Mitsubishi UFJ Financial Group' },
-  ],
-  '三井物産': [
-    { symbol: '8031.T', name: 'Mitsui & Co Ltd' },
-  ],
-  'NTT': [
-    { symbol: '9432.T', name: 'Nippon Telegraph and Telephone Corp' },
-  ],
-  'KDDI': [
-    { symbol: '9433.T', name: 'KDDI Corp' },
-  ],
-  '日産': [
-    { symbol: '7201.T', name: 'Nissan Motor Co Ltd' },
-  ],
-  '日立': [
-    { symbol: '6501.T', name: 'Hitachi Ltd' },
-  ],
-  '東芝': [
-    { symbol: '6502.T', name: 'Toshiba Corp' },
-  ],
-  '富士通': [
-    { symbol: '6702.T', name: 'Fujitsu Ltd' },
-  ],
-  'デンソー': [
-    { symbol: '6902.T', name: 'Denso Corp' },
-  ],
-  'ダイキン': [
-    { symbol: '6367.T', name: 'Daikin Industries Ltd' },
-  ],
-  '花王': [
-    { symbol: '4452.T', name: 'Kao Corp' },
-  ],
-  '資生堂': [
-    { symbol: '4911.T', name: 'Shiseido Co Ltd' },
-  ],
-  '楽天': [
-    { symbol: '4755.T', name: 'Rakuten Group Inc' },
-  ],
-  'メルカリ': [
-    { symbol: '4385.T', name: 'Mercari Inc' },
-  ],
-  'リクルート': [
-    { symbol: '6098.T', name: 'Recruit Holdings Co Ltd' },
-  ],
-  '村田': [
-    { symbol: '6981.T', name: 'Murata Manufacturing Co Ltd' },
-  ],
-  'シャープ': [
-    { symbol: '6753.T', name: 'Sharp Corp' },
-  ],
-  'アサヒ': [
-    { symbol: '2502.T', name: 'Asahi Group Holdings Ltd' },
-  ],
-  'キリン': [
-    { symbol: '2503.T', name: 'Kirin Holdings Co Ltd' },
-  ],
-};
-
 function translateQuery(query: string): string {
   if (JA_KEYWORD_MAP[query]) return JA_KEYWORD_MAP[query];
   for (const [ja, en] of Object.entries(JA_KEYWORD_MAP)) {
@@ -152,37 +62,13 @@ function translateQuery(query: string): string {
   return query;
 }
 
-function getTseResults(query: string): { symbol: string; name: string; type: string; exchange: string }[] {
-  // Exact match
-  if (JA_TSE_MAP[query]) {
-    return JA_TSE_MAP[query].map(item => ({
-      symbol: item.symbol,
-      name: item.name,
-      type: 'Equity',
-      exchange: 'TSE',
-    }));
-  }
-  // Partial match
-  const results: { symbol: string; name: string; type: string; exchange: string }[] = [];
-  for (const [ja, items] of Object.entries(JA_TSE_MAP)) {
-    if (query.includes(ja) || ja.includes(query)) {
-      items.forEach(item => {
-        if (!results.find(r => r.symbol === item.symbol)) {
-          results.push({
-            symbol: item.symbol,
-            name: item.name,
-            type: 'Equity',
-            exchange: 'TSE',
-          });
-        }
-      });
-    }
-  }
-  return results;
-}
-
 function containsJapanese(text: string): boolean {
   return /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text);
+}
+
+// Check if query is a stock code number (e.g. 7203, 9984)
+function isStockCode(query: string): boolean {
+  return /^\d{4}$/.test(query.trim());
 }
 
 export async function GET(request: NextRequest) {
@@ -192,28 +78,73 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    let searchQuery = q.trim();
-    let tseResults: { symbol: string; name: string; type: string; exchange: string }[] = [];
+    const trimmed = q.trim();
+    const allResults: { symbol: string; name: string; type: string; exchange: string }[] = [];
 
-    if (containsJapanese(searchQuery)) {
-      // Get TSE results from local map
-      tseResults = getTseResults(searchQuery);
-      // Translate for Yahoo search
-      searchQuery = translateQuery(searchQuery);
-    }
-
-    // Search Yahoo Finance
-    const yahooResults = await searchSecurities(searchQuery);
-
-    // Merge: TSE first, then Yahoo results (deduplicated)
-    const merged = [...tseResults];
-    for (const yr of yahooResults) {
-      if (!merged.find(m => m.symbol === yr.symbol)) {
-        merged.push(yr);
+    // Case 1: 4-digit stock code -> directly look up TSE symbol
+    if (isStockCode(trimmed)) {
+      const tseSymbol = trimmed + '.T';
+      const quote = await quoteSummary(tseSymbol);
+      if (quote) {
+        allResults.push({
+          symbol: quote.symbol,
+          name: quote.name,
+          type: quote.type,
+          exchange: quote.exchange,
+        });
       }
+      // Also search Yahoo for other matches
+      const yahooResults = await searchSecurities(trimmed);
+      for (const yr of yahooResults) {
+        if (!allResults.find(r => r.symbol === yr.symbol)) {
+          allResults.push(yr);
+        }
+      }
+      return NextResponse.json(allResults);
     }
 
-    return NextResponse.json(merged);
+    // Case 2: Japanese keyword
+    if (containsJapanese(trimmed)) {
+      const englishQuery = translateQuery(trimmed);
+
+      // Search with English translation
+      const yahooResults = await searchSecurities(englishQuery);
+
+      // Separate TSE (.T) results and others
+      const tseResults = yahooResults.filter((r: any) => r.symbol.endsWith('.T'));
+      const otherResults = yahooResults.filter((r: any) => !r.symbol.endsWith('.T'));
+
+      // TSE first, then others
+      allResults.push(...tseResults, ...otherResults);
+
+      // If no TSE results found, also try original Japanese query
+      if (tseResults.length === 0) {
+        const japResults = await searchSecurities(trimmed);
+        const japTse = japResults.filter((r: any) => r.symbol.endsWith('.T'));
+        for (const jr of japTse) {
+          if (!allResults.find(r => r.symbol === jr.symbol)) {
+            allResults.unshift(jr);
+          }
+        }
+        for (const jr of japResults) {
+          if (!allResults.find(r => r.symbol === jr.symbol)) {
+            allResults.push(jr);
+          }
+        }
+      }
+
+      return NextResponse.json(allResults);
+    }
+
+    // Case 3: English / symbol query
+    const yahooResults = await searchSecurities(trimmed);
+
+    // Prioritize .T results
+    const tseResults = yahooResults.filter((r: any) => r.symbol.endsWith('.T'));
+    const otherResults = yahooResults.filter((r: any) => !r.symbol.endsWith('.T'));
+    allResults.push(...tseResults, ...otherResults);
+
+    return NextResponse.json(allResults);
   } catch (e) {
     return NextResponse.json({ error: 'Search failed' }, { status: 500 });
   }

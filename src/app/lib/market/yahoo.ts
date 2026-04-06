@@ -12,7 +12,7 @@ export async function getStockPrice(symbol: string) {
       change_pct: result.regularMarketChangePercent || 0,
     };
   } catch (error) {
-    console.error('Yahoo Finance エラー:', error);
+    console.error('Yahoo Finance error:', error);
     return null;
   }
 }
@@ -21,7 +21,7 @@ export async function searchSecurities(query: string) {
   try {
     const result: any = await yahooFinance.search(
       query,
-      {},
+      { newsCount: 0, quotesCount: 20 },
       { validateResult: false }
     );
 
@@ -34,7 +34,24 @@ export async function searchSecurities(query: string) {
         exchange: q.exchange || q.exchDisp || '',
       }));
   } catch (error) {
-    console.error('検索エラー:', error);
+    console.error('Search error:', error);
     return [];
+  }
+}
+
+export async function quoteSummary(symbol: string) {
+  try {
+    const result: any = await yahooFinance.quote(symbol);
+    if (!result || !result.symbol) return null;
+    return {
+      symbol: result.symbol,
+      name: result.longName || result.shortName || result.symbol,
+      price: result.regularMarketPrice || 0,
+      currency: result.currency || 'JPY',
+      exchange: result.fullExchangeName || result.exchange || '',
+      type: result.quoteType || 'Unknown',
+    };
+  } catch {
+    return null;
   }
 }
