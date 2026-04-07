@@ -17,11 +17,19 @@ export default function DashboardContent() {
     return <Loading />;
   }
 
-  const categories = data?.categories || [];
+  const categoriesObj = data?.categories || {};
   const totalValueJPY = data?.totalValueJPY || 0;
   const holdingsCount = data?.holdingsCount || 0;
 
-  const chartData = categories.map((c: any) => ({
+  // Convert Record to array
+  const categories = Object.entries(categoriesObj).map(([code, cat]) => ({
+    code,
+    name_ja: cat.name,
+    totalValueJPY: cat.totalJPY,
+    count: cat.count,
+  }));
+
+  const chartData = categories.map((c) => ({
     name: c.name_ja,
     value: c.totalValueJPY,
   }));
@@ -65,9 +73,9 @@ export default function DashboardContent() {
           {/* Category List with % */}
           <div className="space-y-3">
             {categories
-              .filter((c: any) => c.totalValueJPY > 0)
-              .sort((a: any, b: any) => b.totalValueJPY - a.totalValueJPY)
-              .map((c: any) => (
+              .filter((c) => c.totalValueJPY > 0)
+              .sort((a, b) => b.totalValueJPY - a.totalValueJPY)
+              .map((c) => (
                 <div key={c.code} className="flex items-center justify-between py-2 border-b border-brand-100 last:border-b-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-brand-700">{c.name_ja}</span>
