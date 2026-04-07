@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /* ========================================
-   Emerald Portfolio – カラーテーマ設定
+   Emerald Portfolio - Color Theme
    ======================================== */
 @theme {
-  /* ── エメラルドグリーン（メインカラー） ── */
+  /* Emerald Green (Main) */
   --color-brand-50:  #ECFDF5;
   --color-brand-100: #D1FAE5;
   --color-brand-200: #A7F3D0;
@@ -16,30 +16,30 @@
   --color-brand-800: #065F46;
   --color-brand-900: #064E3B;
 
-  /* ── 意味カラー ── */
+  /* Semantic Colors */
   --color-profit:  #10B981;
   --color-loss:    #EF4444;
   --color-warning: #F59E0B;
   --color-info:    #3B82F6;
 
-  /* ── チャート用カラー（6資産カテゴリ） ── */
-  --color-chart-1: #10B981;
-  --color-chart-2: #059669;
-  --color-chart-3: #34D399;
-  --color-chart-4: #6EE7B7;
-  --color-chart-5: #047857;
-  --color-chart-6: #A7F3D0;
+  /* Chart Colors (per category) */
+  --color-chart-domestic:  #10B981;
+  --color-chart-us:        #3B82F6;
+  --color-chart-mutual:    #67E8F9;
+  --color-chart-crypto:    #FDE68A;
+  --color-chart-bond:      #A78BFA;
+  --color-chart-cash:      #FBCFE8;
 
-  /* ── フォント ── */
+  /* Fonts */
   --font-sans: "Noto Sans JP", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  /* ── シャドウ ── */
+  /* Shadows */
   --shadow-card: 0 1px 3px rgba(6,95,70,0.08), 0 1px 2px rgba(6,95,70,0.06);
   --shadow-card-hover: 0 10px 25px rgba(16,185,129,0.15);
 }
 
-/* ── ベーススタイル ── */
+/* Base Styles */
 @layer base {
   body {
     @apply bg-brand-50 text-gray-800 antialiased;

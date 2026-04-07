@@ -4,31 +4,41 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type ChartData = {
   name: string;
   value: number;
+  code?: string;
 };
 
 type Props = {
   data: ChartData[];
 };
 
-const COLORS = [
-  'var(--color-chart-1)',
-  'var(--color-chart-2)',
-  'var(--color-chart-3)',
-  'var(--color-chart-4)',
-  'var(--color-chart-5)',
-  'var(--color-chart-6)',
-];
+const CATEGORY_COLORS: Record<string, string> = {
+  DOMESTIC_STOCK: 'var(--color-chart-domestic)',
+  US_STOCK:       'var(--color-chart-us)',
+  MUTUAL_FUND:    'var(--color-chart-mutual)',
+  CRYPTO:         'var(--color-chart-crypto)',
+  BOND:           'var(--color-chart-bond)',
+  CASH:           'var(--color-chart-cash)',
+};
+
+const FALLBACK_COLORS = ['#10B981', '#3B82F6', '#67E8F9', '#FDE68A', '#A78BFA', '#FBCFE8'];
+
+function getColor(entry: ChartData, index: number): string {
+  if (entry.code && CATEGORY_COLORS[entry.code]) {
+    return CATEGORY_COLORS[entry.code];
+  }
+  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
 
 const formatTooltipValue = (value: number | string | Array<number | string>): string => {
   const num = typeof value === 'number' ? value : Number(value);
-  return `¥${Math.round(num).toLocaleString()}`;
+  return `\u00A5${Math.round(num).toLocaleString()}`;
 };
 
 export function DonutChart({ data }: Props) {
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-gray-400">
-        データがありません
+        No data available
       </div>
     );
   }
@@ -45,11 +55,11 @@ export function DonutChart({ data }: Props) {
           paddingAngle={2}
           dataKey="value"
         >
-          {data.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
           ))}
         </Pie>
-        <Tooltip formatter={(value) => [formatTooltipValue(value as number), '金額']} />
+        <Tooltip formatter={(value) => [formatTooltipValue(value as number), 'Amount']} />
         <Legend />
       </PieChart>
     </ResponsiveContainer>
