@@ -29,11 +29,6 @@ function getColor(entry: ChartData, index: number): string {
   return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 }
 
-const formatTooltipValue = (value: number | string | Array<number | string>): string => {
-  const num = typeof value === 'number' ? value : Number(value);
-  return '\u00A5' + Math.round(num).toLocaleString();
-};
-
 export function DonutChart({ data }: Props) {
   if (!data || data.length === 0) {
     return (
@@ -54,12 +49,19 @@ export function DonutChart({ data }: Props) {
           outerRadius={100}
           paddingAngle={2}
           dataKey="value"
+          nameKey="name"
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
           ))}
         </Pie>
-        <Tooltip formatter={(value) => [formatTooltipValue(value as number), '']} />
+        <Tooltip
+          formatter={(value: any) => {
+            const num = typeof value === 'number' ? value : Number(value);
+            return '\u00A5' + Math.round(num).toLocaleString();
+          }}
+          separator=" "
+        />
         <Legend />
       </PieChart>
     </ResponsiveContainer>
