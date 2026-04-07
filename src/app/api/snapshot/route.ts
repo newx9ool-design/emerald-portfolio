@@ -36,7 +36,6 @@ export async function POST() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Get all holdings
     const { data: holdings, error: holdErr } = await supabase
       .from('holdings')
       .select('*, asset_categories(*)')
@@ -51,7 +50,6 @@ export async function POST() {
       if (rate) usdJpy = rate;
     } catch {}
 
-    // Calculate total value with live prices
     let totalValueJPY = 0;
     const details: any[] = [];
 
@@ -62,14 +60,16 @@ export async function POST() {
 
       let unitPrice = h.avg_purchase_price;
       let priceSource = 'purchase';
+      let priceCurrency = h.purchase_currency || 'JPY';
 
-      // Try to get live price for non-cash holdings
-      if (!isCash && h.symbol && !h.symbol.includes('-')) {
+      // Try to get live price for all non-cash holdings
+      if (!isCash && h.symbol) {
         try {
           const live = await getStockPrice(h.symbol);
           if (live && live.price > 0) {
             unitPrice = live.price;
             priceSource = 'live';
+            priceCurrency = live.currency || priceCurrency;
           }
         } catch {}
       }
@@ -77,15 +77,16 @@ export async function POST() {
       let valueJPY: number;
       if (isCash) {
         valueJPY = h.quantity * h.avg_purchase_price;
+      } else if (priceSource === 'live') {
+        const liveLocal = h.quantity * unitPrice;
+        if (priceCurrency === 'USD') {
+          valueJPY = liveLocal * usdJpy;
+        } else {
+          valueJPY = liveLocal;
+        }
       } else {
         const localValue = h.quantity * unitPrice;
-        if (priceSource === 'live') {
-          // Live price is in the stock's currency
-          const liveCurrency = isUSD ? 'USD' : 'JPY';
-          valueJPY = liveCurrency === 'USD' ? localValue * usdJpy : localValue;
-        } else {
-          valueJPY = isUSD ? localValue * usdJpy : localValue;
-        }
+        valueJPY = isUSD ? localValue * usdJpy : localValue;
       }
 
       totalValueJPY += valueJPY;
@@ -93,6 +94,7 @@ export async function POST() {
         symbol: h.symbol,
         name: h.name_ja,
         unitPrice,
+        priceCurrency,
         priceSource,
         valueJPY: Math.round(valueJPY),
       });

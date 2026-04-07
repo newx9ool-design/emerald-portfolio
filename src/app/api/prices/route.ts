@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/app/lib/supabase/server';
 import { getStockPrice } from '@/app/lib/market/yahoo';
 import { getExchangeRate } from '@/app/lib/market/frankfurter';
@@ -29,6 +29,7 @@ export async function GET() {
       liveValueJPY: number;
       purchaseValueJPY: number;
       diffJPY: number;
+      priceSource: string;
     }> = {};
 
     for (const h of (holdings || [])) {
@@ -47,27 +48,43 @@ export async function GET() {
           liveValueJPY: Math.round(purchaseLocal),
           purchaseValueJPY: Math.round(purchaseLocal),
           diffJPY: 0,
+          priceSource: 'fixed',
         };
         continue;
       }
 
-      // Try to get live price
+      // Try to get live price for all non-cash holdings with a symbol
       let livePrice = h.avg_purchase_price;
       let liveCurrency = h.purchase_currency || 'JPY';
+      let priceSource = 'purchase';
 
-      if (h.symbol && !h.symbol.includes('-')) {
+      if (h.symbol) {
         try {
           const live = await getStockPrice(h.symbol);
           if (live && live.price > 0) {
             livePrice = live.price;
             liveCurrency = live.currency || liveCurrency;
+            priceSource = 'live';
           }
         } catch {}
       }
 
-      // Live value in JPY
+      // Calculate live value in JPY
       const liveLocal = h.quantity * livePrice;
-      const liveValueJPY = liveCurrency === 'USD' ? liveLocal * usdJpy : liveLocal;
+      let liveValueJPY: number;
+
+      if (priceSource === 'live') {
+        // Use the currency returned by Yahoo Finance
+        if (liveCurrency === 'USD') {
+          liveValueJPY = liveLocal * usdJpy;
+        } else {
+          // JPY or other currency that Yahoo returns (e.g. BTC-JPY returns JPY)
+          liveValueJPY = liveLocal;
+        }
+      } else {
+        // Fallback to purchase currency
+        liveValueJPY = isUSD ? liveLocal * usdJpy : liveLocal;
+      }
 
       prices[h.id] = {
         livePrice,
@@ -75,6 +92,7 @@ export async function GET() {
         liveValueJPY: Math.round(liveValueJPY),
         purchaseValueJPY: Math.round(purchaseValueJPY),
         diffJPY: Math.round(liveValueJPY - purchaseValueJPY),
+        priceSource,
       };
     }
 
