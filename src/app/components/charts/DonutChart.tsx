@@ -12,15 +12,15 @@ type Props = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  DOMESTIC_STOCK: 'var(--color-chart-domestic)',
-  US_STOCK:       'var(--color-chart-us)',
-  MUTUAL_FUND:    'var(--color-chart-mutual)',
-  CRYPTO:         'var(--color-chart-crypto)',
-  BOND:           'var(--color-chart-bond)',
-  CASH:           'var(--color-chart-cash)',
+  DOMESTIC_STOCK: '#10B981',
+  US_STOCK:       '#6EE7B7',
+  MUTUAL_FUND:    '#67E8F9',
+  CRYPTO:         '#FDE68A',
+  BOND:           '#A78BFA',
+  CASH:           '#FBCFE8',
 };
 
-const FALLBACK_COLORS = ['#10B981', '#3B82F6', '#67E8F9', '#FDE68A', '#A78BFA', '#FBCFE8'];
+const FALLBACK_COLORS = ['#10B981', '#6EE7B7', '#67E8F9', '#FDE68A', '#A78BFA', '#FBCFE8'];
 
 function getColor(entry: ChartData, index: number): string {
   if (entry.code && CATEGORY_COLORS[entry.code]) {
@@ -31,7 +31,7 @@ function getColor(entry: ChartData, index: number): string {
 
 const formatTooltipValue = (value: number | string | Array<number | string>): string => {
   const num = typeof value === 'number' ? value : Number(value);
-  return `\u00A5${Math.round(num).toLocaleString()}`;
+  return '\u00A5' + Math.round(num).toLocaleString();
 };
 
 export function DonutChart({ data }: Props) {
