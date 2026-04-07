@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Emerald Portfolio',
-  description: '個人向け金融資産管理アプリ',
+  description: 'Personal Asset Management App',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -16,11 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               💎 Emerald Portfolio
             </a>
             <nav className="flex gap-4 text-sm">
-              <a href="/" className="hover:text-brand-200">ダッシュボード</a>
-              <a href="/holdings" className="hover:text-brand-200">保有銘柄</a>
-              <a href="/search" className="hover:text-brand-200">銘柄検索</a>
-              <a href="/exchange" className="hover:text-brand-200">為替</a>
-              <a href="/history" className="hover:text-brand-200">資産推移</a>
+              <a href="/" className="hover:text-brand-200">Dashboard</a>
+              <a href="/holdings" className="hover:text-brand-200">Holdings</a>
+              <a href="/exchange" className="hover:text-brand-200">Exchange</a>
+              <a href="/history" className="hover:text-brand-200">History</a>
             </nav>
           </div>
         </header>
