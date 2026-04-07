@@ -16,10 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               💎 Emerald Portfolio
             </a>
             <nav className="flex gap-4 text-sm">
-              <a href="/" className="hover:text-brand-200">Dashboard</a>
-              <a href="/holdings" className="hover:text-brand-200">Holdings</a>
-              <a href="/exchange" className="hover:text-brand-200">Exchange</a>
-              <a href="/history" className="hover:text-brand-200">History</a>
+              <a href="/" className="hover:text-brand-200">ダッシュボード</a>
+              <a href="/holdings" className="hover:text-brand-200">保有銘柄</a>
+              <a href="/exchange" className="hover:text-brand-200">為替</a>
+              <a href="/history" className="hover:text-brand-200">資産推移</a>
             </nav>
           </div>
         </header>
