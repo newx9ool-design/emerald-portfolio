@@ -59,7 +59,7 @@ export function DonutChart({ data }: Props) {
             <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
           ))}
         </Pie>
-        <Tooltip formatter={(value) => [formatTooltipValue(value as number), 'Amount']} />
+        <Tooltip formatter={(value) => [formatTooltipValue(value as number), '']} />
         <Legend />
       </PieChart>
     </ResponsiveContainer>
