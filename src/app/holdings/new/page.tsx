@@ -44,6 +44,18 @@ export default function NewHoldingPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const getCategoryCode = () => {
+    const cat = categories.find(c => c.id === form.category_id);
+    return cat?.code || 'OTHER';
+  };
+
+  const generateSymbol = (name: string, categoryCode: string): string => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const prefix = categoryCode || 'OTH';
+    const nameSlug = name.slice(0, 4).toUpperCase();
+    return prefix + '-' + nameSlug + '-' + timestamp;
+  };
+
   const handleSearch = async () => {
     const q = searchQuery.trim();
     if (!q) return;
@@ -51,7 +63,7 @@ export default function NewHoldingPage() {
     setSearched(true);
     setSearchResults([]);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch('/api/search?q=' + encodeURIComponent(q));
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -80,7 +92,19 @@ export default function NewHoldingPage() {
     setSubmitting(true);
     setError('');
     try {
-      const symbol = form.symbol || generateSymbol(form.name_ja, getCategoryCode());
+      const catCode = getCategoryCode();
+      const symbol = form.symbol || generateSymbol(form.name_ja, catCode);
+
+      let qty: number;
+      let price: number;
+
+      if (catCode === 'CASH') {
+        qty = Number(form.quantity);
+        price = 1;
+      } else {
+        qty = Number(form.quantity);
+        price = Number(form.avg_purchase_price);
+      }
 
       const res = await fetch('/api/holdings', {
         method: 'POST',
@@ -89,8 +113,8 @@ export default function NewHoldingPage() {
           category_id: form.category_id,
           symbol,
           name_ja: form.name_ja,
-          quantity: Number(form.quantity),
-          avg_purchase_price: Number(form.avg_purchase_price),
+          quantity: qty,
+          avg_purchase_price: price,
           purchase_currency: form.purchase_currency,
           memo: form.memo,
         }),
@@ -105,18 +129,6 @@ export default function NewHoldingPage() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const getCategoryCode = () => {
-    const cat = categories.find(c => c.id === form.category_id);
-    return cat?.code || 'OTHER';
-  };
-
-  const generateSymbol = (name: string, categoryCode: string): string => {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const prefix = categoryCode || 'OTH';
-    const nameSlug = name.slice(0, 4).toUpperCase();
-    return `${prefix}-${nameSlug}-${timestamp}`;
   };
 
   const selectedCategoryCode = getCategoryCode();
@@ -134,7 +146,6 @@ export default function NewHoldingPage() {
         <CardTitle>Holding Info</CardTitle>
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit}>
-          {/* Step 1: Category */}
           <Input
             label="Category"
             name="category_id"
@@ -144,7 +155,6 @@ export default function NewHoldingPage() {
             options={categoryOptions}
           />
 
-          {/* Step 2: Search or manual input */}
           {form.category_id && !isCash && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-brand-700 mb-1">
@@ -167,18 +177,17 @@ export default function NewHoldingPage() {
                 TSE stocks: use 4-digit code (e.g. 7203=Toyota, 1803=Shimizu)
               </p>
 
-              {/* Search results */}
               {searchResults.length > 0 && (
                 <div className="mt-2 border border-brand-200 rounded-lg max-h-60 overflow-y-auto">
                   {searchResults.map((r, i) => (
                     <button
-                      key={`${r.symbol}-${i}`}
+                      key={r.symbol + '-' + i}
                       type="button"
                       onClick={() => handleSelectStock(r)}
                       className="w-full text-left px-3 py-2 hover:bg-brand-50 border-b border-brand-100 last:border-b-0"
                     >
                       <p className="font-medium text-brand-800 text-sm">{r.name}</p>
-                      <p className="text-xs text-gray-500">{r.symbol} · {r.exchange} · {r.type}</p>
+                      <p className="text-xs text-gray-500">{r.symbol} - {r.exchange} - {r.type}</p>
                     </button>
                   ))}
                 </div>
@@ -188,14 +197,12 @@ export default function NewHoldingPage() {
                   <p className="text-sm text-yellow-700">No results found</p>
                   <p className="text-xs text-yellow-600 mt-1">
                     For Japanese stocks, try the 4-digit stock code instead of the company name.
-                    You can find codes at Yahoo Finance Japan or your brokerage.
                   </p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Selected stock info */}
           {form.symbol && !isCash && (
             <div className="mb-4 p-3 bg-brand-50 rounded-lg">
               <p className="text-sm text-brand-600">Selected:</p>
@@ -211,7 +218,6 @@ export default function NewHoldingPage() {
             </div>
           )}
 
-          {/* Cash: manual name */}
           {isCash && (
             <Input
               label="Name"
@@ -223,11 +229,10 @@ export default function NewHoldingPage() {
             />
           )}
 
-          {/* Step 3: Quantity and price */}
           {(form.symbol || isCash) && (
             <>
               <Input
-                label={isCash ? 'Amount' : 'Quantity'}
+                label={isCash ? 'Amount (JPY)' : 'Quantity'}
                 name="quantity"
                 type="number"
                 value={form.quantity}
