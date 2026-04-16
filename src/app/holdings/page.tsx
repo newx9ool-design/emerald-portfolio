@@ -28,7 +28,6 @@ export default function HoldingsPage() {
     purchase_currency: 'JPY', memo: '',
   });
 
-  // Live prices state
   const [livePrices, setLivePrices] = useState<Record<string, PriceInfo>>({});
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceUpdated, setPriceUpdated] = useState(false);
@@ -60,22 +59,48 @@ export default function HoldingsPage() {
   const handleEditClick = (h: any) => {
     setEditId(h.id);
     setConfirmId(null);
-    setEditForm({
-      name_ja: h.name_ja || '',
-      quantity: String(h.quantity),
-      avg_purchase_price: String(h.avg_purchase_price),
-      purchase_currency: h.purchase_currency || 'JPY',
-      memo: h.memo || '',
-    });
+    const code = h.asset_categories?.code || '';
+    if (isCash(code)) {
+      setEditForm({
+        name_ja: h.name_ja || '',
+        quantity: String(Math.round(h.quantity * h.avg_purchase_price)),
+        avg_purchase_price: '1',
+        purchase_currency: h.purchase_currency || 'JPY',
+        memo: h.memo || '',
+      });
+    } else {
+      setEditForm({
+        name_ja: h.name_ja || '',
+        quantity: String(h.quantity),
+        avg_purchase_price: String(h.avg_purchase_price),
+        purchase_currency: h.purchase_currency || 'JPY',
+        memo: h.memo || '',
+      });
+    }
   };
 
   const handleEditSave = async (h: any) => {
-    const qty = Number(editForm.quantity);
-    const price = Number(editForm.avg_purchase_price);
-    if (!qty || qty <= 0 || !price || price <= 0) {
-      alert('Please enter valid quantity and price');
-      return;
+    const code = h.asset_categories?.code || '';
+    let qty: number;
+    let price: number;
+
+    if (isCash(code)) {
+      const amount = Number(editForm.quantity);
+      if (!amount || amount <= 0) {
+        alert('Please enter a valid amount');
+        return;
+      }
+      qty = amount;
+      price = 1;
+    } else {
+      qty = Number(editForm.quantity);
+      price = Number(editForm.avg_purchase_price);
+      if (!qty || qty <= 0 || !price || price <= 0) {
+        alert('Please enter valid quantity and price');
+        return;
+      }
     }
+
     try {
       await editHolding({
         id: h.id, name_ja: editForm.name_ja, quantity: qty,
@@ -170,23 +195,21 @@ export default function HoldingsPage() {
               onChange={(e) => setEditForm({ ...editForm, name_ja: e.target.value })}
               className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
           </div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">{isCash(categoryCode) ? 'Amount' : 'Qty'}</p>
-              <input type="number" value={editForm.quantity}
-                onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
-                step={isCrypto(categoryCode) ? '0.00001' : '1'} min="0"
-                className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
-            </div>
-            {!isCash(categoryCode) && (
-              <div className="flex-1">
-                <p className="text-xs text-gray-500">Unit Price</p>
-                <input type="number" value={editForm.avg_purchase_price}
-                  onChange={(e) => setEditForm({ ...editForm, avg_purchase_price: e.target.value })}
-                  min="0" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
-              </div>
-            )}
+          <div>
+            <p className="text-xs text-gray-500">{isCash(categoryCode) ? 'Amount (JPY)' : 'Quantity'}</p>
+            <input type="number" value={editForm.quantity}
+              onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+              step={isCash(categoryCode) ? '1' : isCrypto(categoryCode) ? '0.00001' : '1'} min="0"
+              className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
           </div>
+          {!isCash(categoryCode) && (
+            <div>
+              <p className="text-xs text-gray-500">Unit Price</p>
+              <input type="number" value={editForm.avg_purchase_price}
+                onChange={(e) => setEditForm({ ...editForm, avg_purchase_price: e.target.value })}
+                min="0" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+            </div>
+          )}
           {!isCash(categoryCode) && (
             <div>
               <p className="text-xs text-gray-500">Currency</p>
@@ -275,10 +298,28 @@ export default function HoldingsPage() {
   };
 
   const formatDiff = (diff: number) => {
-    if (diff > 0) return { text: `+Y${diff.toLocaleString()}`, color: 'text-green-600' };
-    if (diff < 0) return { text: `-Y${Math.abs(diff).toLocaleString()}`, color: 'text-red-500' };
+    if (diff > 0) return { text: '+Y' + diff.toLocaleString(), color: 'text-green-600' };
+    if (diff < 0) return { text: '-Y' + Math.abs(diff).toLocaleString(), color: 'text-red-500' };
     return { text: 'Y0', color: 'text-gray-500' };
   };
+
+  // Calculate totals
+  let totalPurchaseJPY = 0;
+  let totalLiveJPY = 0;
+  holdings.forEach((h: any) => {
+    const currency = h.purchase_currency || 'JPY';
+    const localVal = h.quantity * h.avg_purchase_price;
+    const jpyVal = isUSD(currency) && usdJpy ? localVal * usdJpy : localVal;
+    totalPurchaseJPY += jpyVal;
+    const price = livePrices[h.id];
+    if (price) {
+      totalLiveJPY += price.liveValueJPY;
+    } else {
+      totalLiveJPY += jpyVal;
+    }
+  });
+  const totalDiff = totalLiveJPY - totalPurchaseJPY;
+  const totalDiffFmt = formatDiff(Math.round(totalDiff));
 
   return (
     <div>
@@ -295,6 +336,23 @@ export default function HoldingsPage() {
       {message && (
         <div className="mb-4 p-3 bg-brand-100 text-brand-800 rounded-lg text-sm font-medium">
           {message}
+        </div>
+      )}
+
+      {priceUpdated && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Card>
+            <p className="text-xs text-gray-500">Total Cost</p>
+            <p className="text-lg font-bold text-brand-800">Y{Math.round(totalPurchaseJPY).toLocaleString()}</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-gray-500">Current Value</p>
+            <p className="text-lg font-bold text-brand-800">Y{Math.round(totalLiveJPY).toLocaleString()}</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-gray-500">Profit/Loss</p>
+            <p className={'text-lg font-bold ' + totalDiffFmt.color}>{totalDiffFmt.text}</p>
+          </Card>
         </div>
       )}
 
@@ -328,20 +386,15 @@ export default function HoldingsPage() {
                       </p>
                     ) : (
                       <div>
-                        {/* Holdings info */}
                         <p className="text-xs text-gray-400">
                           {h.quantity} shares x {isUSD(currency) ? '$' : 'Y'}
                           {h.avg_purchase_price.toLocaleString()}
                         </p>
-
-                        {/* Purchase value */}
                         <p className="text-sm text-gray-500">
                           Cost: {isUSD(currency)
                             ? '$' + totalLocal.toLocaleString() + ' (Y' + Math.round(totalJPY).toLocaleString() + ')'
                             : 'Y' + Math.round(totalLocal).toLocaleString()}
                         </p>
-
-                        {/* Live value */}
                         {price && !isCash(categoryCode) ? (
                           <div className="mt-1 p-2 bg-gray-50 rounded">
                             <p className="text-xs text-gray-400">
@@ -351,7 +404,7 @@ export default function HoldingsPage() {
                             <p className="font-bold text-brand-700">
                               Y{price.liveValueJPY.toLocaleString()}
                             </p>
-                            <p className={`text-sm font-semibold ${diff!.color}`}>
+                            <p className={'text-sm font-semibold ' + diff!.color}>
                               {diff!.text}
                             </p>
                           </div>
