@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useDashboard } from '@/app/hooks/useDashboard';
 import { useHistory } from '@/app/hooks/useHistory';
 import { useExchangeRate } from '@/app/hooks/useExchangeRate';
@@ -7,11 +8,14 @@ import { Card, CardTitle, CardValue } from '@/app/components/ui/Card';
 import { DonutChart } from '@/app/components/charts/DonutChart';
 import { HistoryChart } from '@/app/components/charts/HistoryChart';
 import { Loading } from '@/app/components/ui/Loading';
+import { Button } from '@/app/components/ui/Button';
 
 export default function DashboardContent() {
-  const { data, loading: dashLoading } = useDashboard();
-  const { history, loading: histLoading } = useHistory();
+  const { data, loading: dashLoading, refetch: refetchDash } = useDashboard();
+  const { history, loading: histLoading, refetch: refetchHist } = useHistory();
   const { rate, loading: rateLoading } = useExchangeRate();
+  const [updating, setUpdating] = useState(false);
+  const [message, setMessage] = useState('');
 
   if (dashLoading || histLoading || rateLoading) {
     return <Loading />;
@@ -21,7 +25,7 @@ export default function DashboardContent() {
   const totalValueJPY = data?.totalValueJPY || 0;
   const holdingsCount = data?.holdingsCount || 0;
 
-  const categories = Object.entries(categoriesObj).map(([code, cat]) => ({
+  const categories = Object.entries(categoriesObj).map(([code, cat]: [string, any]) => ({
     code,
     name_ja: cat.name,
     totalValueJPY: cat.totalJPY,
@@ -43,8 +47,41 @@ export default function DashboardContent() {
     return ((value / totalValueJPY) * 100).toFixed(1) + '%';
   };
 
+  const handleUpdate = async () => {
+    setUpdating(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/snapshot', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok) {
+        setMessage('Updated: ' + formatJPY(json.totalValueJPY));
+        if (refetchDash) await refetchDash();
+        if (refetchHist) await refetchHist();
+      } else {
+        setMessage('Error: ' + (json.error || 'Unknown'));
+      }
+    } catch (e) {
+      setMessage('Update failed');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div />
+        <Button onClick={handleUpdate} disabled={updating}>
+          {updating ? 'Updating...' : 'Update Prices'}
+        </Button>
+      </div>
+
+      {message && (
+        <div className="bg-brand-100 text-brand-800 px-4 py-2 rounded text-sm">
+          {message}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardTitle>Total Assets</CardTitle>
