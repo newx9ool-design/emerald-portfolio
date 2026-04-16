@@ -10,6 +10,8 @@ export async function getStockPrice(symbol: string) {
       price: result.regularMarketPrice || 0,
       currency: result.currency || 'JPY',
       change_pct: result.regularMarketChangePercent || 0,
+      change: result.regularMarketChange || 0,
+      previousClose: result.regularMarketPreviousClose || 0,
     };
   } catch (error) {
     console.error('Yahoo Finance quote error:', symbol, error);
@@ -24,7 +26,6 @@ export async function searchSecurities(query: string) {
       { newsCount: 0, quotesCount: 20 },
       { validateResult: false }
     );
-
     return (result.quotes || [])
       .filter((q: any) => q.symbol)
       .map((q: any) => ({
@@ -39,7 +40,6 @@ export async function searchSecurities(query: string) {
   }
 }
 
-// Direct quote lookup - works for any valid symbol like 7203.T
 export async function quoteLookup(symbol: string) {
   try {
     const result: any = await yahooFinance.quote(symbol);
@@ -57,7 +57,6 @@ export async function quoteLookup(symbol: string) {
   }
 }
 
-// Fallback: direct Yahoo Finance search API call
 export async function searchYahooAPI(query: string) {
   try {
     const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=20&newsCount=0&lang=en-US`;

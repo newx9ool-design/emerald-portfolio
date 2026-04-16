@@ -10,12 +10,25 @@ import { HistoryChart } from '@/app/components/charts/HistoryChart';
 import { Loading } from '@/app/components/ui/Loading';
 import { Button } from '@/app/components/ui/Button';
 
+type MarketIndicator = {
+  key: string;
+  label: string;
+  value: number | null;
+  change_pct?: number;
+  change?: number;
+  currency?: string;
+  source?: string;
+  error?: string;
+};
+
 export default function DashboardContent() {
   const { data, loading: dashLoading, refetch: refetchDash } = useDashboard();
   const { history, loading: histLoading, refetch: refetchHist } = useHistory();
   const { rate, loading: rateLoading } = useExchangeRate();
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState('');
+  const [indicators, setIndicators] = useState<MarketIndicator[]>([]);
+  const [marketUpdatedAt, setMarketUpdatedAt] = useState('');
 
   if (dashLoading || histLoading || rateLoading) {
     return <Loading />;
@@ -47,18 +60,35 @@ export default function DashboardContent() {
     return ((value / totalValueJPY) * 100).toFixed(1) + '%';
   };
 
+  const formatChange = (change: number | undefined, currency: string | undefined) => {
+    if (change === undefined || change === null) return '';
+    const sign = change >= 0 ? '+' : '';
+    if (currency === 'JPY') {
+      return sign + '\u00A5' + Math.round(change).toLocaleString('ja-JP');
+    }
+    return sign + change.toFixed(2);
+  };
+
   const handleUpdate = async () => {
     setUpdating(true);
     setMessage('');
     try {
-      const res = await fetch('/api/snapshot', { method: 'POST' });
-      const json = await res.json();
-      if (res.ok) {
-        setMessage('Updated: ' + formatJPY(json.totalValueJPY));
+      const [snapshotRes, marketRes] = await Promise.all([
+        fetch('/api/snapshot', { method: 'POST' }),
+        fetch('/api/market'),
+      ]);
+
+      if (snapshotRes.ok) {
+        const snapJson = await snapshotRes.json();
+        setMessage('Updated: ' + formatJPY(snapJson.totalValueJPY));
         if (refetchDash) await refetchDash();
         if (refetchHist) await refetchHist();
-      } else {
-        setMessage('Error: ' + (json.error || 'Unknown'));
+      }
+
+      if (marketRes.ok) {
+        const marketJson = await marketRes.json();
+        setIndicators(marketJson.indicators || []);
+        setMarketUpdatedAt(marketJson.updatedAt || '');
       }
     } catch (e) {
       setMessage('Update failed');
@@ -96,6 +126,45 @@ export default function DashboardContent() {
           <CardValue>{rate ? '\u00A5' + rate.toFixed(2) : '-'}</CardValue>
         </Card>
       </div>
+
+      {indicators.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <CardTitle>Market Index</CardTitle>
+            {marketUpdatedAt && (
+              <span className="text-xs text-gray-400">
+                {new Date(marketUpdatedAt).toLocaleString('ja-JP')}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {indicators.map((ind) => (
+              <div key={ind.key} className="bg-brand-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">{ind.label}</p>
+                {ind.value !== null ? (
+                  <>
+                    <p className="text-lg font-bold text-brand-800">
+                      {ind.currency === 'JPY'
+                        ? '\u00A5' + Math.round(ind.value).toLocaleString('ja-JP')
+                        : '$' + ind.value.toLocaleString()}
+                    </p>
+                    {ind.change !== undefined && ind.change !== null && (
+                      <p className={`text-xs mt-1 ${ind.change >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {formatChange(ind.change, ind.currency)}
+                        {ind.change_pct !== undefined && ind.change_pct !== null
+                          ? ' (' + (ind.change_pct >= 0 ? '+' : '') + ind.change_pct.toFixed(2) + '%)'
+                          : ''}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">-</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <CardTitle>Asset Allocation</CardTitle>

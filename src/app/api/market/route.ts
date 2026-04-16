@@ -4,108 +4,87 @@ import { getStockPrice } from '@/app/lib/market/yahoo';
 
 export async function GET() {
   try {
-    const results: Record<string, any> = {};
+    const indicators: any[] = [];
 
     // 1. USD/JPY
     try {
       const rate = await getExchangeRate('USD', 'JPY');
-      results.usdjpy = {
+      indicators.push({
+        key: 'usdjpy',
         label: 'USD/JPY',
-        value: rate,
-        currency: '¥',
+        value: rate || null,
+        prevClose: null,
+        change: null,
+        currency: 'JPY',
         source: 'Frankfurter API',
-      };
+      });
     } catch (e) {
       console.error('USD/JPY error:', e);
-      results.usdjpy = { label: 'USD/JPY', value: null, error: 'Failed to fetch' };
+      indicators.push({ key: 'usdjpy', label: 'USD/JPY', value: null, error: 'Failed' });
     }
 
-    // 2. Nikkei 225 (^N225)
+    // 2. Nikkei 225
     try {
-      const nikkei = await getStockPrice('^N225');
-      results.nikkei = {
+      const q = await getStockPrice('^N225');
+      indicators.push({
+        key: 'nikkei',
         label: 'Nikkei 225',
-        value: nikkei?.price || null,
-        change_pct: nikkei?.change_pct || 0,
-        currency: '¥',
-        symbol: '^N225',
-      };
+        value: q?.price || null,
+        change_pct: q?.change_pct || 0,
+        currency: 'JPY',
+      });
     } catch (e) {
       console.error('Nikkei error:', e);
-      results.nikkei = { label: 'Nikkei 225', value: null, error: 'Failed to fetch' };
+      indicators.push({ key: 'nikkei', label: 'Nikkei 225', value: null, error: 'Failed' });
     }
 
-    // 3. Dow Jones (^DJI)
+    // 3. TOPIX
     try {
-      const dow = await getStockPrice('^DJI');
-      results.dow = {
-        label: 'NY Dow',
-        value: dow?.price || null,
-        change_pct: dow?.change_pct || 0,
-        currency: '$',
-        symbol: '^DJI',
-      };
+      const q = await getStockPrice('1305.T');
+      indicators.push({
+        key: 'topix',
+        label: 'TOPIX ETF (1305)',
+        value: q?.price || null,
+        change_pct: q?.change_pct || 0,
+        currency: 'JPY',
+      });
     } catch (e) {
-      console.error('Dow error:', e);
-      results.dow = { label: 'NY Dow', value: null, error: 'Failed to fetch' };
+      console.error('TOPIX error:', e);
+      indicators.push({ key: 'topix', label: 'TOPIX', value: null, error: 'Failed' });
     }
 
-    // 4. Bitcoin/JPY (BTC-JPY)
+    // 4. Gold/JPY (1540.T = 純金上場信託)
     try {
-      const btc = await getStockPrice('BTC-JPY');
-      results.btcjpy = {
-        label: 'Bitcoin/JPY',
-        value: btc?.price || null,
-        change_pct: btc?.change_pct || 0,
-        currency: '¥',
-        symbol: 'BTC-JPY',
-      };
+      const q = await getStockPrice('1540.T');
+      indicators.push({
+        key: 'gold',
+        label: 'Gold (1540)',
+        value: q?.price || null,
+        change_pct: q?.change_pct || 0,
+        currency: 'JPY',
+      });
+    } catch (e) {
+      console.error('Gold error:', e);
+      indicators.push({ key: 'gold', label: 'Gold/JPY', value: null, error: 'Failed' });
+    }
+
+    // 5. BTC/JPY
+    try {
+      const q = await getStockPrice('BTC-JPY');
+      indicators.push({
+        key: 'btcjpy',
+        label: 'BTC/JPY',
+        value: q?.price || null,
+        change_pct: q?.change_pct || 0,
+        currency: 'JPY',
+      });
     } catch (e) {
       console.error('BTC-JPY error:', e);
-      results.btcjpy = { label: 'Bitcoin/JPY', value: null, error: 'Failed to fetch' };
-    }
-
-    // 5. eMAXIS Slim All Country (0331418A)
-    try {
-      const ac = await getStockPrice('0331418A.T');
-      if (ac && ac.price > 0) {
-        results.allcountry = {
-          label: 'eMAXIS Slim All Country',
-          value: ac.price,
-          change_pct: ac.change_pct || 0,
-          currency: '¥',
-          symbol: '0331418A.T',
-        };
-      } else {
-        // Fallback: try Yahoo Finance mutual fund symbol
-        const ac2 = await getStockPrice('2559.T');
-        results.allcountry = {
-          label: 'MAXIS All Country (2559)',
-          value: ac2?.price || null,
-          change_pct: ac2?.change_pct || 0,
-          currency: '¥',
-          symbol: '2559.T',
-        };
-      }
-    } catch (e) {
-      console.error('All Country error:', e);
-      try {
-        const ac2 = await getStockPrice('2559.T');
-        results.allcountry = {
-          label: 'MAXIS All Country (2559)',
-          value: ac2?.price || null,
-          change_pct: ac2?.change_pct || 0,
-          currency: '¥',
-          symbol: '2559.T',
-        };
-      } catch {
-        results.allcountry = { label: 'All Country', value: null, error: 'Failed to fetch' };
-      }
+      indicators.push({ key: 'btcjpy', label: 'BTC/JPY', value: null, error: 'Failed' });
     }
 
     const updatedAt = new Date().toISOString();
-
-    return NextResponse.json({ indicators: results, updatedAt });
+    return NextResponse.json({ indicators, updatedAt });
   } catch (e) {
     console.error('Market API error:', e);
     return NextResponse.json({ error: 'Failed to fetch market data' }, { status: 500 });

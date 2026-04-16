@@ -13,13 +13,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="bg-brand-700 text-white">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <a href="/" className="text-xl font-bold tracking-tight">
-              💎 Emerald Portfolio
+              Emerald Portfolio
             </a>
             <nav className="flex gap-4 text-sm">
-              <a href="/" className="hover:text-brand-200">ダッシュボード</a>
-              <a href="/holdings" className="hover:text-brand-200">保有銘柄</a>
-              <a href="/exchange" className="hover:text-brand-200">為替</a>
-              <a href="/history" className="hover:text-brand-200">資産推移</a>
+              <a href="/" className="hover:text-brand-200">Dashboard</a>
+              <a href="/holdings" className="hover:text-brand-200">Holdings</a>
+              <a href="/history" className="hover:text-brand-200">History</a>
             </nav>
           </div>
         </header>
