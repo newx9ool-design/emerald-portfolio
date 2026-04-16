@@ -9,12 +9,13 @@ export async function GET() {
     // 1. USD/JPY
     try {
       const rate = await getExchangeRate('USD', 'JPY');
+      const usdjpyQuote = await getStockPrice('JPY=X');
       indicators.push({
         key: 'usdjpy',
         label: 'USD/JPY',
-        value: rate || null,
-        prevClose: null,
-        change: null,
+        value: rate || usdjpyQuote?.price || null,
+        change: usdjpyQuote?.change || null,
+        change_pct: usdjpyQuote?.change_pct || null,
         currency: 'JPY',
         source: 'Frankfurter API',
       });
@@ -30,6 +31,7 @@ export async function GET() {
         key: 'nikkei',
         label: 'Nikkei 225',
         value: q?.price || null,
+        change: q?.change || null,
         change_pct: q?.change_pct || 0,
         currency: 'JPY',
       });
@@ -38,13 +40,14 @@ export async function GET() {
       indicators.push({ key: 'nikkei', label: 'Nikkei 225', value: null, error: 'Failed' });
     }
 
-    // 3. TOPIX
+    // 3. TOPIX ETF (1305.T)
     try {
       const q = await getStockPrice('1305.T');
       indicators.push({
         key: 'topix',
         label: 'TOPIX ETF (1305)',
         value: q?.price || null,
+        change: q?.change || null,
         change_pct: q?.change_pct || 0,
         currency: 'JPY',
       });
@@ -53,13 +56,14 @@ export async function GET() {
       indicators.push({ key: 'topix', label: 'TOPIX', value: null, error: 'Failed' });
     }
 
-    // 4. Gold/JPY (1540.T = 純金上場信託)
+    // 4. Gold (1540.T)
     try {
       const q = await getStockPrice('1540.T');
       indicators.push({
         key: 'gold',
         label: 'Gold (1540)',
         value: q?.price || null,
+        change: q?.change || null,
         change_pct: q?.change_pct || 0,
         currency: 'JPY',
       });
@@ -75,6 +79,7 @@ export async function GET() {
         key: 'btcjpy',
         label: 'BTC/JPY',
         value: q?.price || null,
+        change: q?.change || null,
         change_pct: q?.change_pct || 0,
         currency: 'JPY',
       });
